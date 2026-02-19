@@ -1,0 +1,52 @@
+name: Claude Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  pull_request_review_comment:
+    types: [created]
+  issue_comment:
+    types: [created]
+
+jobs:
+  claude-review:
+    runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'pull_request') ||
+      (github.event_name == 'issue_comment' && github.event.issue.pull_request && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude'))
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Claude Code Review
+        uses: anthropics/claude-code-action@beta
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          model: claude-opus-4-6
+          system_prompt: |
+            You are an expert code reviewer for an oil & gas financial analytics project.
+            This repo contains dbt models, dashboard configurations, and data models for
+            Formentera Operations accounting reports (Permian, Eagle Ford, SCOOP/STACK, Williston).
+
+            When reviewing code, focus on:
+            - SQL correctness and dbt best practices (ref(), source(), proper CTEs)
+            - Data integrity and accuracy for financial metrics (LOE, revenue, production taxes)
+            - Performance (avoid unnecessary full table scans, check for incremental opportunities)
+            - Naming conventions consistent with the project
+            - Security (no hardcoded credentials or sensitive values)
+            - Dashboard configuration completeness and accuracy
+
+            Be concise and actionable in your feedback.
+          direct_prompt: |
+            Please review this pull request and provide feedback on:
+            1. Code quality and correctness
+            2. dbt best practices
+            3. Any potential bugs or data issues
+            4. Performance considerations
