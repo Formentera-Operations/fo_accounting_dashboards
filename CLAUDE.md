@@ -123,6 +123,43 @@ Pre-JIB preview (unposted): `WHERE is_invoice_posted = false`
 
 ---
 
+### General Ledger — `gold_financial`
+
+#### `gold_fct_gl_details`
+**ODA equivalent:** AR Cross-Clear report, GL Detail Extract (GLE)
+**Grain:** One row per GL journal entry line
+**Used for:** AR Cross-Clear skill — no dedicated gold model needed, query directly with filters
+
+| Column | Description |
+|--------|-------------|
+| `main_account` | GL main account code (e.g. 501, 130) |
+| `sub_account` | GL sub account code (e.g. 1, 2, 3, 4) |
+| `account_name` | GL account name (e.g. REVENUE PAYABLE, A/R JIB) |
+| `voucher_code` | Voucher number — use to pair debit/credit rows |
+| `entity_type` | Type of entity (owner, vendor, well, etc.) |
+| `entity_code` | Entity identifier |
+| `entity_name` | Entity display name |
+| `journal_date` | Transaction date |
+| `accrual_date` | Accounting period date |
+| `gl_description` | Transaction description |
+| `net_amount` | Amount — debits positive, credits negative |
+
+**AR Cross-Clear filter pattern:**
+```sql
+WHERE main_account IN ('501', '130')
+  AND sub_account IN ('1', '2', '3', '4')
+  AND (
+    gl_description LIKE '%Net Revenue Against A/R%'
+    OR gl_description LIKE '%AR Cross Clear%'
+  )
+```
+
+**Pairing logic:** Each cross-clear voucher produces two rows that net to zero —
+one debit (501.x Revenue Payable) and one credit (130.x A/R JIB). Group by
+`voucher_code` to see matched pairs.
+
+---
+
 ### Accounts Payable — `gold_financial`
 
 #### `gold_dim_ap_check_register`

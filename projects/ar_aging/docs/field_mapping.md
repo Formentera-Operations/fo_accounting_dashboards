@@ -104,25 +104,55 @@ and append comment columns as blank/user-editable columns in the Excel export.
 This report shows GL journal entries that net Revenue Payable (501.1) against AR JIB (130.2).
 Each cross-clear produces two balanced rows (debit + credit) that net to zero per voucher.
 
-**No dedicated gold model exists yet** — needs to be built from GL source data.
-Candidate sources: `stg_oda__gl`, `int_oda_gl`
+**Source model:** `FO_PRODUCTION_DB.GOLD_FINANCIAL.GOLD_FCT_GL_DETAILS`
+No dedicated gold model needed — query pattern below is sufficient for skill use.
 
-| ODA Column | Likely Source Column | Notes |
-|------------|---------------------|-------|
-| Main | GL main account code | e.g. 501, 130 |
-| Sub | GL sub account code | e.g. 1, 2 |
-| Name | GL account name | e.g. REVENUE PAYABLE, A/R JIB |
-| Number (1st) | Voucher number | cross-clear voucher |
-| Number (2nd) | Check/reference number | often blank |
-| Date (1st) | Transaction date | |
-| Date (2nd) | Accounting period | e.g. "December 2025" |
-| Code | Owner/entity code | |
-| Location | Well or entity location | |
-| (Description) | Transaction description | e.g. "Net Revenue Against A/R" |
-| Amount | Transaction amount | debits positive, credits negative |
+### Column Mapping
 
-**Build note:** This is a ❌ net-new gold model. Filter GL for accounts 501.1 and 130.2
-and vouchers where the transaction description contains cross-clear entries.
+| ODA Column | `gold_fct_gl_details` Column | Notes |
+|------------|------------------------------|-------|
+| Main | `main_account` | e.g. 501, 130 |
+| Sub | `sub_account` | e.g. 1, 2 |
+| Name | `account_name` | e.g. REVENUE PAYABLE, A/R JIB |
+| Number (Voucher) | `voucher_code` | cross-clear voucher |
+| Entity Type | `entity_type` | owner, vendor, well, etc. |
+| Code | `entity_code` | owner/entity code |
+| Location / Name | `entity_name` | owner/entity name |
+| Date | `journal_date` | transaction date |
+| Accrual Date | `accrual_date` | accounting period date |
+| Description | `gl_description` | e.g. "Net Revenue Against A/R" |
+| Amount | `net_amount` | debits positive, credits negative |
+
+### Standard Query Pattern
+
+```sql
+SELECT
+    main_account,
+    sub_account,
+    account_name,
+    voucher_code,
+    entity_type,
+    entity_code,
+    entity_name,
+    journal_date,
+    accrual_date,
+    gl_description,
+    net_amount
+FROM FO_PRODUCTION_DB.GOLD_FINANCIAL.GOLD_FCT_GL_DETAILS
+WHERE main_account IN ('501', '130')
+  AND sub_account IN ('1', '2', '3', '4')
+  AND (
+    gl_description LIKE '%Net Revenue Against A/R%'
+    OR gl_description LIKE '%AR Cross Clear%'
+  )
+ORDER BY voucher_code, main_account
+```
+
+**Date filter:** Add `AND journal_date BETWEEN '{period_start}' AND '{period_end}'`
+for period-specific reports.
+
+**Pairing logic:** Each voucher produces two rows that net to zero — one debit (501.1)
+and one credit (130.2). Group by `voucher_code` to see matched pairs.
 
 ---
 
