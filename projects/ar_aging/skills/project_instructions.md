@@ -72,28 +72,37 @@ Always apply these unless the user explicitly overrides:
 
 ## Aging Bucket Rules
 
-ODA's "30 Days-Current" column combines two gold model columns. Always apply:
+**CRITICAL:** The gold model's pre-computed bucket columns (`balance_90_plus_days`, etc.)
+use `current_date()` at build time and are **only accurate on the day the model ran**.
+Always recalculate aging inline using `DATEDIFF('day', invoice_date, :as_of_date)`.
 
-```
-"30 Days-Current" = current_balance + balance_1_30_days
-```
+| ODA Bucket Label | Inline SQL | Gold Model Column (reference only) |
+|-----------------|------------|-------------------------------------|
+| 30 Days-Current | `DATEDIFF BETWEEN 0 AND 30` | `current_balance + balance_1_30_days` |
+| 60-31 Days | `DATEDIFF BETWEEN 31 AND 60` | `balance_31_60_days` |
+| 90-61 Days | `DATEDIFF BETWEEN 61 AND 90` | `balance_61_90_days` |
+| Over 90 Days | `DATEDIFF > 90` | `balance_90_plus_days` |
+| Total Outstanding | `SUM(remaining_balance)` | `remaining_balance` |
 
-| ODA Bucket Label | Gold Model Column(s) |
-|-----------------|----------------------|
-| 30 Days-Current | `current_balance` + `balance_1_30_days` |
-| 60-31 Days | `balance_31_60_days` |
-| 90-61 Days | `balance_61_90_days` |
-| Over 90 Days | `balance_90_plus_days` |
-| Total Outstanding | `remaining_balance` |
+**AR Summary report parameters** (validated against January 2026 reference file):
+
+| Parameter | Rule | Example (Jan 2026 report) |
+|-----------|------|--------------------------|
+| `as_of_date` | Last day of report month | `2026-01-31` |
+| `period_start` | First day of prior month | `2025-12-01` |
+| `period_end` | Last day of prior month | `2025-12-31` |
+| `jib_cycle_start` | JIB billing cycle start (from header) | `2025-11-19` |
+| `jib_cycle_end` | JIB billing cycle end (from header) | `2025-12-17` |
 
 ---
 
 ## Query Behavior
 
 **Period handling:**
-- If the user specifies a period ("January 2026", "Q1"), translate to a date range
-  and apply `AND invoice_date BETWEEN '{start}' AND '{end}'`
-- If no period is specified, ask before querying — never assume current month
+- If the user requests an AR Summary ("give me the January 2026 AR aging"), set
+  `as_of_date` to the **last day of that month** and payment period to the **prior month**
+- Always state the period interpretation before querying
+- If no period specified, ask — never assume current month
 
 **Company handling:**
 - Default to `company_code = '200'` for AR aging
