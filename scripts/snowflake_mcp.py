@@ -14,12 +14,30 @@ Claude Code integration: configure in .mcp.json (see repo root).
 
 import asyncio
 import json
+import re
 import sys
 
 import snowflake.connector
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import TextContent, Tool
+
+# ---------------------------------------------------------------------------
+# Read-only guard
+# ---------------------------------------------------------------------------
+_ALLOWED_KEYWORDS = frozenset({
+    "SELECT", "WITH", "SHOW", "DESCRIBE", "DESC", "EXPLAIN",
+})
+
+
+def _first_keyword(sql: str) -> str:
+    """Return the first SQL keyword, ignoring leading comments and whitespace."""
+    # Strip single-line comments (-- ...)
+    cleaned = re.sub(r"--[^\n]*", "", sql)
+    # Strip multi-line comments (/* ... */)
+    cleaned = re.sub(r"/\*.*?\*/", "", cleaned, flags=re.DOTALL)
+    tokens = cleaned.strip().split()
+    return tokens[0].upper() if tokens else ""
 
 # ---------------------------------------------------------------------------
 # Connection config — matches dbt profiles.yml
@@ -60,9 +78,11 @@ async def list_tools() -> list[Tool]:
         Tool(
             name="execute_sql",
             description=(
-                "Execute SQL against FO_PRODUCTION_DB (Formentera gold financial models). "
+                "Execute a READ-ONLY SQL query against FO_PRODUCTION_DB (Formentera gold financial models). "
                 "Returns results as JSON with row_count, columns, and rows. "
-                "Use for AR aging, GL details, revenue checks, and any ad-hoc Snowflake query. "
+                "Only SELECT, WITH, SHOW, DESCRIBE, and EXPLAIN are permitted — "
+                "any write operation (INSERT, UPDATE, DELETE, DROP, CREATE, ALTER, MERGE, TRUNCATE, etc.) "
+                "is blocked at the server level. "
                 "A LIMIT clause is automatically appended to SELECT queries that don't include one."
             ),
             inputSchema={
@@ -95,8 +115,22 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
     query = arguments["query"].strip().rstrip(";")
     limit = min(int(arguments.get("limit", 500)), 5000)
 
-    # Auto-add LIMIT to SELECT queries that don't already have one.
-    if query.upper().startswith("SELECT") and "LIMIT" not in query.upper():
+    # Read-only guard — checked before anything reaches Snowflake.
+    keyword = _first_keyword(query)
+    if keyword not in _ALLOWED_KEYWORDS:
+        return [
+            TextContent(
+                type="text",
+                text=(
+                    f"Blocked: this server is read-only. "
+                    f"Only SELECT / WITH / SHOW / DESCRIBE / EXPLAIN are permitted. "
+                    f"Got: {keyword!r}"
+                ),
+            )
+        ]
+
+    # Auto-add LIMIT to top-level SELECT queries that don't already have one.
+    if keyword == "SELECT" and "LIMIT" not in query.upper():
         query = f"{query} LIMIT {limit}"
 
     try:
