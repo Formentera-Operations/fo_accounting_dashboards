@@ -1,0 +1,4 @@
+# MCP server dependencies
+# Install with: pip install -r scripts/requirements_mcp.txt
+mcp>=1.0.0
+snowflake-connector-python>=4.0.0
