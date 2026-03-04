@@ -1,5 +1,5 @@
 ---
-name: ar-aging
+name: ar-aging-analysis
 description: >
   Generates an "AR Aging Summary" report showing outstanding AR balances bucketed by age,
   with supplemental columns for netting, revenue payments, suspense, and JIB cycle payments.
