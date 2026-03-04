@@ -1,0 +1,9 @@
+{
+  "name": "fo-accounting",
+  "version": "0.1.0",
+  "description": "Formentera Operations accounting report suite. Replaces manual Quorum ODA report downloads with Claude-powered Snowflake queries, Excel exports, and ad-hoc analysis across AR, AP, GL, JIB, and Revenue domains.",
+  "author": {
+    "name": "Formentera Operations"
+  },
+  "repository": "https://github.com/Formentera-Operations/fo_accounting_dashboards.git"
+}
